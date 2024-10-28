@@ -1,6 +1,7 @@
 from transformers import AutoModel, AutoTokenizer
 import torch
 import os
+import pickle
 
 
 # Dictionary to map language codes to Hugging Face models
@@ -67,7 +68,7 @@ def get_embeddings(texts, tokenizer, model):
 
 # TODO: Remove testing code below
 if __name__ == '__main__':
-    # Example texts for each language
+    """# Example texts for each language
     texts_by_language = {
         'en': [
             "What is the capital of France?",
@@ -98,7 +99,7 @@ if __name__ == '__main__':
             "딥러닝 모델을 훈련하는 방법은?"
         ]
     }
-
+    
     # Iterate over each language and generate embeddings for sample texts
     for language_code, texts in texts_by_language.items():
         # Load model and tokenizer for the current language
@@ -111,3 +112,22 @@ if __name__ == '__main__':
         # Output the embeddings and their shape
         print(f"Texts: {texts}")
         print(f"Embeddings shape for {language_code}: {embeddings.shape}")  # Shape: [num_texts, hidden_size]
+        torch.save(embeddings, f"data/tensor_{language_code}.pt")
+    """
+
+    languages = ['en','fr','de','es','it','ar','ko']
+
+    for language in languages:
+        with open(f'data/processed_documents_{language}.pkl','wb',encoding='utf-8') as doc_file:
+            texts = pickle.load(doc_file)
+
+        # Load model and tokenizer for the current language
+        print(f"\nGenerating embeddings for {language} texts...")
+        model, tokenizer = load_model_and_tokenizer(language)
+
+        # Generate embeddings for the sample texts in this language
+        embeddings = get_embeddings(texts, tokenizer, model)
+
+        torch.save(embeddings, f"data/embeddings_tensor_{language}.pt")
+        print(f"{language} embeddings saved as data/embeddings_tensor_{language}.pt")
+        

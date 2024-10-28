@@ -103,6 +103,15 @@ def inverse_document_frequency(corpus_frequencies: dict, corpus_vocabulary: list
 
     return idf
 
+def batch_process_texts(texts, separator, language, batch_size=1000):
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        combined_text = separator.join(batch)
+        # Preprocess the combined text
+        processed_text = preprocess_data(combined_text, language)
+        # Split back into individual texts and yield
+        yield processed_text.split(separator)
+
 # Testing block
 if __name__ == '__main__':
 
@@ -141,6 +150,7 @@ if __name__ == '__main__':
     print("Corpus created for each language")
     gc.collect()
     languages = ["en","fr","it","es","de","ar","ko"]
+    language_mapping = {"en":"english","fr":"french","de":"german","es":"spanish","ar":"arabic","ko":"korean","it":"italian"}
     for language in languages:
         print(f"Loading corpus in {language}")
         with open(f"data/corpus_{language}.pkl","rb",encoding='utf-8') as corpus_file:
@@ -161,3 +171,18 @@ if __name__ == '__main__':
         with open(f"data/corpus_idf_{language}.pkl","wb",encoding='utf-8') as idf_file:
             pickle.dump(idf, idf_file)
         print(f"Saved the {language} corpus idf as data/corpus_idf_{language}.pkl")
+
+        processed_texts = list()
+        texts = [document["text"] for document in corpus]
+
+        if language != 'en':
+            separator = "  ENDOFDOCUMENT  "
+        else:
+            separator = "  FINDEDOCUMENT  "
+        
+        for processed_batch in batch_process_texts(texts, separator, language_mapping[language], batch_size=1000):
+            processed_texts += processed_batch
+
+        with open(f'data/processed_documents_{language}.pkl','wb',encoding='utf-8') as doc_file:
+            pickle.dump(processed_texts, doc_file)
+        print(f"Saved the {language} processed texts as data/processed_documents_{language}.pkl")
