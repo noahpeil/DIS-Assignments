@@ -40,7 +40,7 @@ def load_model_and_tokenizer(language_code):
     return model, tokenizer
 
 
-def get_embeddings(texts, tokenizer, model):
+def get_embeddings(texts, tokenizer, model, agg="mean"):
     """
     Generate embeddings for a list of texts using the specified model and tokenizer.
 
@@ -59,9 +59,43 @@ def get_embeddings(texts, tokenizer, model):
     with torch.no_grad():  # No gradient calculation needed for embedding generation
         outputs = model(**inputs)
 
-    # Get the embeddings by averaging the hidden states across the sequence (mean pooling)
-    # outputs.last_hidden_state: [batch_size, sequence_length, hidden_size]
-    embeddings = outputs.last_hidden_state.mean(dim=1)  # Mean pooling over the sequence dimension
+    if agg == "mean":
+        # Get the embeddings by averaging the hidden states across the sequence (mean pooling)
+        # outputs.last_hidden_state: [batch_size, sequence_length, hidden_size]
+        embeddings = outputs.last_hidden_state.mean(dim=1)  # Mean pooling over the sequence dimension
+
+    elif agg == "tf_idf_mean":
+        token_embeddings = outputs.last_hidden_state  # Shape: [batch_size, sequence_length, hidden_size]
+        input_ids = inputs['input_ids']
+
+        batch_size, seq_length, _ = token_embeddings.shape
+        tf = torch.zeros((batch_size, seq_length), dtype=torch.float32)
+
+        for doc_idx in range(batch_size):
+            # Count occurrences of each token in the document
+            unique_tokens, counts = torch.unique(input_ids[doc_idx], return_counts=True)
+            # Calculate TF for the unique tokens
+            tf[doc_idx][unique_tokens] = counts.float() / seq_length  # Normalized by sequence length
+
+        idf = torch.zeros(seq_length, dtype=torch.float32)
+
+        for token_id in range(tokenizer.vocab_size):
+            # Count how many documents contain each token
+            num_docs_with_token = (input_ids == token_id).any(dim=1).sum().item()
+            if num_docs_with_token > 0:
+                idf[token_id] = torch.log(torch.tensor(batch_size / num_docs_with_token, dtype=torch.float32))
+
+        # Compute TF-IDF weights for each token
+        tf_idf_weights = tf * idf.unsqueeze(0)  # Shape: [batch_size, seq_length]
+
+        # Handle padding by setting weights of padding tokens to zero
+        tf_idf_weights[input_ids == tokenizer.pad_token_id] = 0.0
+
+        # Normalize weights to sum to 1 to ensure mean pooling
+        tf_idf_weights_sum = tf_idf_weights.sum(dim=1, keepdim=True)
+        tf_idf_weights_normalized = tf_idf_weights / tf_idf_weights_sum  # Broadcasting
+
+        embeddings = torch.matmul(tf_idf_weights_normalized, token_embeddings)  # Shape: [batch_size, hidden_size]
 
     return embeddings
 
