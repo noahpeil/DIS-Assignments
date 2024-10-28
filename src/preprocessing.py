@@ -3,6 +3,7 @@ import json
 from nltk.corpus import stopwords
 import re
 import os
+import collections
 
 
 def load_data(train_path, dev_path, test_path, corpus_path):
@@ -19,7 +20,7 @@ def load_data(train_path, dev_path, test_path, corpus_path):
     return train_df, dev_df, test_df, corpus_df
 
 
-def preprocess_data(train_df, dev_df, test_df, corpus_df):
+def preprocess_data(text, language):
 
     text = text.lower()
     text = re.sub(r'\W+', ' ', text)
