@@ -8,7 +8,7 @@ def get_document_vocabulary(words: str) -> dict:
 def get_corpus_frequencies(corpus: list, language: str) -> dict:
     corpus_dict = {}
     for document in corpus:
-        corpus_dict[document["docid"]] = get_document_vocabulary(preprocess_data(document["text"],language))
+        corpus_dict[document["docid"]] = get_document_vocabulary(preprocess_data(document["text"].split(" "),language))
     return corpus_dict
 
 def get_corpus_vocabulary(corpus_frequencies: dict) -> list:
