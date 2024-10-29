@@ -56,7 +56,7 @@ def create_language_corpus(corpus: list) -> dict:
     for document in corpus:
         language_corpus[document["lang"]].append(document)
     for language in language_corpus.keys():
-        with open(f"data/corpus_{language}.pkl","wb",encoding='utf-8') as file:
+        with open(f"data/corpus_{language}.pkl","wb") as file:
             pickle.dump(language_corpus[language],file)
     del language_corpus
 
@@ -76,7 +76,7 @@ def get_document_vocabulary(words: str) -> dict:
 def get_corpus_frequencies(corpus: list, language: str) -> dict:
     corpus_dict = {}
     for document in corpus:
-        corpus_dict[document["docid"]] = get_document_vocabulary(preprocess_data(document["text"].split(" "),language))
+        corpus_dict[document["docid"]] = get_document_vocabulary(preprocess_data(document["text"],language).split(" "))
     return corpus_dict
 
 def get_corpus_vocabulary(corpus_frequencies: dict) -> list:
@@ -145,44 +145,47 @@ if __name__ == '__main__':
     with open(JSON_PATH,"r",encoding='utf-8') as file:
         data = json.load(file)
 
-    print("Creating corpus for each language")
-    create_language_corpus(data)
-    print("Corpus created for each language")
+    #print("Creating corpus for each language")
+    #create_language_corpus(data)
+    #print("Corpus created for each language")
     gc.collect()
     languages = ["en","fr","it","es","de","ar","ko"]
     language_mapping = {"en":"english","fr":"french","de":"german","es":"spanish","ar":"arabic","ko":"korean","it":"italian"}
     for language in languages:
         print(f"Loading corpus in {language}")
-        with open(f"data/corpus_{language}.pkl","rb",encoding='utf-8') as corpus_file:
+        with open(f"data/corpus_{language}.pkl","rb") as corpus_file:
             corpus = pickle.load(corpus_file)
         print(f"Corpus loaded in {language}")
 
-        corpus_frequencies = get_corpus_frequencies(corpus, language)
-        with open(f"data/corpus_freq_{language}.pkl","wb",encoding='utf-8') as freq_file:
+        """corpus_frequencies = get_corpus_frequencies(corpus, language)
+        with open(f"data/corpus_freq_{language}.pkl","wb") as freq_file:
             pickle.dump(corpus_frequencies, freq_file)
         print(f"Saved the {language} corpus frequency as data/corpus_freq_{language}.pkl")
 
         corpus_vocabulary = get_corpus_vocabulary(corpus_frequencies)
-        with open(f"data/corpus_vocab_{language}.pkl","wb",encoding='utf-8') as vocab_file:
+        with open(f"data/corpus_vocab_{language}.pkl","wb") as vocab_file:
             pickle.dump(corpus_vocabulary, vocab_file)
         print(f"Saved the {language} corpus vocabulary as data/corpus_vocab_{language}.pkl")
 
         idf = inverse_document_frequency(corpus_frequencies, corpus_vocabulary)
-        with open(f"data/corpus_idf_{language}.pkl","wb",encoding='utf-8') as idf_file:
+        with open(f"data/corpus_idf_{language}.pkl","wb") as idf_file:
             pickle.dump(idf, idf_file)
-        print(f"Saved the {language} corpus idf as data/corpus_idf_{language}.pkl")
+        print(f"Saved the {language} corpus idf as data/corpus_idf_{language}.pkl")"""
 
         processed_texts = list()
         texts = [document["text"] for document in corpus]
 
         if language != 'en':
-            separator = "  ENDOFDOCUMENT  "
+            separator = "  endofdocument  "
         else:
-            separator = "  FINDEDOCUMENT  "
+            separator = "  findedocument  "
         
         for processed_batch in batch_process_texts(texts, separator, language_mapping[language], batch_size=1000):
             processed_texts += processed_batch
 
-        with open(f'data/processed_documents_{language}.pkl','wb',encoding='utf-8') as doc_file:
-            pickle.dump(processed_texts, doc_file)
-        print(f"Saved the {language} processed texts as data/processed_documents_{language}.pkl")
+        if processed_texts:
+            with open(f'data/processed_documents_{language}.pkl','wb') as doc_file:
+                pickle.dump(processed_texts, doc_file)
+            print(f"Saved the {language} processed texts as data/processed_documents_{language}.pkl")
+        else:
+            print(f"No data to save in {language}.")

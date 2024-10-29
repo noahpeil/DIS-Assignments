@@ -72,10 +72,14 @@ def get_embeddings(texts, tokenizer, model, agg="mean"):
         tf = torch.zeros((batch_size, seq_length), dtype=torch.float32)
 
         for doc_idx in range(batch_size):
-            # Count occurrences of each token in the document
-            unique_tokens, counts = torch.unique(input_ids[doc_idx], return_counts=True)
-            # Calculate TF for the unique tokens
-            tf[doc_idx][unique_tokens] = counts.float() / seq_length  # Normalized by sequence length
+            try:
+                # Count occurrences of each token in the document
+                unique_tokens, counts = torch.unique(input_ids[doc_idx], return_counts=True)
+                # Calculate TF for the unique tokens
+                tf[doc_idx][unique_tokens] = counts.float() / seq_length  # Normalized by sequence length
+            except:
+                print(doc_idx)
+                raise ValueError
 
         idf = torch.zeros(seq_length, dtype=torch.float32)
 
@@ -149,10 +153,10 @@ if __name__ == '__main__':
         torch.save(embeddings, f"data/tensor_{language_code}.pt")
     """
 
-    languages = ['en','fr','de','es','it','ar','ko']
+    languages = ['fr','en','de','es','it','ar','ko']
 
     for language in languages:
-        with open(f'data/processed_documents_{language}.pkl','wb',encoding='utf-8') as doc_file:
+        with open(f'data/processed_documents_{language}.pkl','rb') as doc_file:
             texts = pickle.load(doc_file)
 
         # Load model and tokenizer for the current language
@@ -160,8 +164,8 @@ if __name__ == '__main__':
         model, tokenizer = load_model_and_tokenizer(language)
 
         # Generate embeddings for the sample texts in this language
-        embeddings = get_embeddings(texts, tokenizer, model)
+        embeddings = get_embeddings(texts, tokenizer, model, "tf_idf_mean")
 
         torch.save(embeddings, f"data/embeddings_tensor_{language}.pt")
-        print(f"{language} embeddings saved as data/embeddings_tensor_{language}.pt")
+        print(f"{language} embeddings saved as data/embeddings_tensor_idf_mean_{language}.pt")
         
