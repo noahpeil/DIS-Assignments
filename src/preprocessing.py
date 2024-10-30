@@ -1,6 +1,8 @@
 import pandas as pd
 import json
+import nltk
 from nltk.corpus import stopwords
+from nltk.tokenize import sent_tokenize
 import re
 import os
 import collections
@@ -22,19 +24,19 @@ def load_data(train_path, dev_path, test_path, corpus_path):
     return train_df, dev_df, test_df, corpus_df
 
 
-def preprocess_data(text, language):
+def preprocess_data(text: str, language: str, do_stopwords: bool):
 
     text = text.lower()
-    text = re.sub(r'\W+', ' ', text)
+    #text = re.sub(r'\W+', ' ', text)
+    text = re.sub(r"[^\w\s']", ' ', text)
 
-    try:
-        stop_words = set(stopwords.words(language))
-        text = ' '.join([word for word in text.split() if word not in stop_words])
-    except:
-        pass 
+    if do_stopwords:
+        try:
+            stop_words = set(stopwords.words(language))
+            text = ' '.join([word for word in text.split() if word not in stop_words])
+        except:
+            pass 
     return text
-
-    # raise NotImplementedError
 
 
 def split_data_by_language(df):
@@ -73,10 +75,10 @@ def save_cleaned_data(cleaned_data, output_dir='cleaned_data'):
 def get_document_vocabulary(words: str) -> dict:
     return dict(collections.Counter(words))
 
-def get_corpus_frequencies(corpus: list, language: str) -> dict:
+def get_corpus_frequencies(corpus: list, language: str, do_stopwords: bool) -> dict:
     corpus_dict = {}
     for document in corpus:
-        corpus_dict[document["docid"]] = get_document_vocabulary(preprocess_data(document["text"],language).split(" "))
+        corpus_dict[document["docid"]] = get_document_vocabulary(preprocess_data(document["text"],language, do_stopwords).split(" "))
     return corpus_dict
 
 def get_corpus_vocabulary(corpus_frequencies: dict) -> list:
@@ -103,14 +105,84 @@ def inverse_document_frequency(corpus_frequencies: dict, corpus_vocabulary: list
 
     return idf
 
-def batch_process_texts(texts, separator, language, batch_size=1000):
+def term_frequency(word: str, document_frequency: dict) -> float:
+    return document_frequency[word] / max(document_frequency.values())
+
+def tf_idf(word: str, document_frequency: dict, idf: dict) -> float:
+    return term_frequency(word, document_frequency)*idf[word]
+
+def batch_process_texts(texts, separator, language, do_stopwords, batch_size=1000):
     for i in range(0, len(texts), batch_size):
         batch = texts[i:i + batch_size]
         combined_text = separator.join(batch)
         # Preprocess the combined text
-        processed_text = preprocess_data(combined_text, language)
+        processed_text = preprocess_data(combined_text, language, do_stopwords)
         # Split back into individual texts and yield
         yield processed_text.split(separator)
+
+def resize_sentences_selection(sentences: list[str], idf: dict, document_frequency: dict, language: str, do_stopwords: bool, selection_method: str, max_length: int = 512) -> str:
+    if language != 'english':
+        sent_separator = "  endofsentence  "
+    else:
+        sent_separator = "  findephrase  "
+    processed_sentences = preprocess_data(sent_separator.join(sentences), language, do_stopwords).split(sent_separator)
+    processed_sentences_with_stopwords = preprocess_data(sent_separator.join(sentences), language, False).split(sent_separator)
+    tf_idf_sentences = []
+    len_sentences = []
+    for sentence, sentence_with_stopwords in zip(processed_sentences, processed_sentences_with_stopwords):
+        words = sentence.split(" ") #Use a tokenizer ?
+        len_sentences.append(len(sentence_with_stopwords.split(" ")))
+        if selection_method == "mean":
+            tf_idf_total = 0
+            for word in words:
+                tf_idf_total += tf_idf(word, document_frequency, idf)
+            tf_idf_sentences.append(tf_idf_total/len(words))
+
+        elif selection_method == "sum":
+            tf_idf_total = 0
+            for word in words:
+                tf_idf_total += tf_idf(word, document_frequency, idf)
+            tf_idf_sentences.append(tf_idf_total)
+
+        elif selection_method == "max":
+            tf_idf_words= []
+            for word in words:
+                tf_idf_words.append(tf_idf(word, document_frequency, idf))
+            tf_idf_sentences.append(max(tf_idf_words))
+
+    most_relevant = np.argsort(tf_idf_sentences)[::-1]
+    ordered_len_sentences = np.array(len_sentences)[most_relevant]
+    cum_sum_len = [sum(ordered_len_sentences[:i]) for i in range(1,len(ordered_len_sentences)+1)]
+    n_sentences_to_keep = len([i for i in cum_sum_len if i <= max_length])
+
+    if n_sentences_to_keep != len(sentences):
+        most_relevant_to_keep = most_relevant[:n_sentences_to_keep]
+        resized_doc = " ".join([sentences[i] for i in range(len(sentences)) if i in most_relevant_to_keep])
+    else:
+        resized_doc =  " ".join(sentences)
+
+    return resized_doc
+
+def select_most_relevant(texts: list[str], idf: dict, corpus_frequencies: dict, language: str, do_stopwords: bool, max_length: int = 512) -> list[str]:
+    relevant_texts = []
+    has_resized_docs = 0
+    for text, document_frequency in zip(texts, corpus_frequencies.values()):
+        if language not in ["arabic","korean"]:
+            sentences = sent_tokenize(text, language)
+        elif language == "arabic":
+            sentences = re.split(r"(?<=[.!؟]) +", text)
+        elif language == "korean":
+            sentences = re.split(r"(?<=[.?!]) +", text)
+        total_elements = sum([len(sentence.split(" ")) for sentence in sentences])
+        if total_elements > max_length:
+            resized_doc = resize_sentences_selection(sentences, idf, document_frequency, language, do_stopwords, max_length)
+            relevant_texts.append(resized_doc)
+            has_resized_docs += 1
+        else:
+            relevant_texts.append(text)
+    if has_resized_docs:
+        print(f"Resized {has_resized_docs} documents in {language} corpus")
+    return relevant_texts
 
 # Testing block
 if __name__ == '__main__':
@@ -145,19 +217,19 @@ if __name__ == '__main__':
     with open(JSON_PATH,"r",encoding='utf-8') as file:
         data = json.load(file)
 
-    #print("Creating corpus for each language")
-    #create_language_corpus(data)
-    #print("Corpus created for each language")
+    print("Creating corpus for each language")
+    create_language_corpus(data)
+    print("Corpus created for each language")
     gc.collect()
-    languages = ["en","fr","it","es","de","ar","ko"]
-    language_mapping = {"en":"english","fr":"french","de":"german","es":"spanish","ar":"arabic","ko":"korean","it":"italian"}
-    for language in languages:
+    LANGUAGES = ["fr","en","it","es","de","ar","ko"]
+    LANGUAGE_MAPPING = {"en":"english","fr":"french","de":"german","es":"spanish","ar":"arabic","ko":"korean","it":"italian"}
+    for language in LANGUAGES:
         print(f"Loading corpus in {language}")
         with open(f"data/corpus_{language}.pkl","rb") as corpus_file:
             corpus = pickle.load(corpus_file)
         print(f"Corpus loaded in {language}")
 
-        """corpus_frequencies = get_corpus_frequencies(corpus, language)
+        corpus_frequencies = get_corpus_frequencies(corpus, LANGUAGE_MAPPING[language], True)
         with open(f"data/corpus_freq_{language}.pkl","wb") as freq_file:
             pickle.dump(corpus_frequencies, freq_file)
         print(f"Saved the {language} corpus frequency as data/corpus_freq_{language}.pkl")
@@ -170,17 +242,19 @@ if __name__ == '__main__':
         idf = inverse_document_frequency(corpus_frequencies, corpus_vocabulary)
         with open(f"data/corpus_idf_{language}.pkl","wb") as idf_file:
             pickle.dump(idf, idf_file)
-        print(f"Saved the {language} corpus idf as data/corpus_idf_{language}.pkl")"""
+        print(f"Saved the {language} corpus idf as data/corpus_idf_{language}.pkl")
 
         processed_texts = list()
         texts = [document["text"] for document in corpus]
+
+        relevant_texts = select_most_relevant(texts, idf, corpus_frequencies, LANGUAGE_MAPPING[language], True, max_length=350)
 
         if language != 'en':
             separator = "  endofdocument  "
         else:
             separator = "  findedocument  "
         
-        for processed_batch in batch_process_texts(texts, separator, language_mapping[language], batch_size=1000):
+        for processed_batch in batch_process_texts(relevant_texts, separator, LANGUAGE_MAPPING[language], False, batch_size=1000):
             processed_texts += processed_batch
 
         if processed_texts:
