@@ -27,7 +27,6 @@ def load_data(train_path, dev_path, test_path, corpus_path):
 def preprocess_data(text: str, language: str, do_stopwords: bool):
 
     text = text.lower()
-    #text = re.sub(r'\W+', ' ', text)
     text = re.sub(r"[^\w\s']", ' ', text)
 
     if do_stopwords:
