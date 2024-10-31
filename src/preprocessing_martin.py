@@ -10,7 +10,7 @@ import pickle
 import numpy as np
 import gc
 from tqdm import tqdm
-from embeddings import load_model_and_tokenizer
+from embeddings_martin import load_model_and_tokenizer
 from transformers import AutoTokenizer
 import torch
 

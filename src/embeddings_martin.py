@@ -185,8 +185,10 @@ if __name__ == '__main__':
         print(f"\nGenerating embeddings for {language} texts...")
         model, tokenizer = load_model_and_tokenizer(language)
 
+        lower_texts = [text.lower() for text in texts]
+
         # Generate embeddings for the sample texts in this language
-        embeddings = get_embeddings(texts, tokenizer, model, 1000, "mean")
+        embeddings = get_embeddings(lower_texts, tokenizer, model, 1000, "mean")
 
         torch.save(embeddings, f"data/embeddings_tensor_{language}.pt")
         print(f"{language} embeddings saved as data/embeddings_tensor_mean_{language}.pt")
