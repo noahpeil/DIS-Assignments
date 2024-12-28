@@ -1,5 +1,3 @@
-import collections
-import numpy as np
 from preprocessing import *
 
 def term_frequency(word: str, document_frequency: dict) -> float:
